@@ -53,11 +53,11 @@ pi.registerTool(defineTool({
 	promptSnippet: "Inspect goal state or retrieve omitted requirements.",
 	promptGuidelines: [],
 	parameters: Type.Object({
-  section: Type.Optional(StringEnum(["summary", "objective", "tasks", "history"] as const)),
+  section: Type.Optional(StringEnum(["summary", "objective", "tasks", "history"] as const, { description: "Goal section to retrieve; defaults to summary. Detail sections support cursor pagination." })),
   task_id: Type.Optional(Type.String({description: "With section=tasks, retrieve one task."})),
   cursor: Type.Optional(Type.String({maxLength: 256, description: "Next page; repeat section/task."})),
 		verbose: Type.Optional(Type.Boolean({ description: "Full detail mode." })),
-		include_history: Type.Optional(Type.Boolean()),
+		include_history: Type.Optional(Type.Boolean({ description: "Include recent lifecycle events and audit history in the summary." })),
 	}, { additionalProperties: false }),
 	async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
 		core.reconcileFocusedGoalFromDisk(ctx);
@@ -515,16 +515,30 @@ pi.registerTool(defineTool({
 	parameters: Type.Object({
 		status: Type.Optional(StringEnum(["complete", "blocked", "paused"] as const, { description: "Exclusive with continuation." })),
 		continuation: Type.Optional(Type.Union([
-			Type.Object({ kind: Type.Literal("ready") }, { additionalProperties: false }),
-			Type.Object({ kind: Type.Literal("wait"), reason: Type.String({ minLength: 1, maxLength: 2000 }), deadline: Type.String(), wait_id: Type.Optional(Type.String()), polling: Type.Optional(Type.Object({ interval_seconds: Type.Integer({ minimum: 1, maximum: 2147483 }), max_checks: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }) }, { additionalProperties: false })) }, { additionalProperties: false }),
-		])),
+			Type.Object({
+				kind: StringEnum(["ready"] as const, { description: "Continue work; all wait-only fields are forbidden." }),
+			}, { additionalProperties: false, description: "Ready for another execution segment." }),
+			Type.Object({
+				kind: StringEnum(["wait"] as const, { description: "Wait for an external event until a future deadline." }),
+				reason: Type.String({ minLength: 1, maxLength: 2000, description: "Required for wait: nonempty reason, at most 2000 characters." }),
+				deadline: Type.String({ description: "Required for wait: future ISO timestamp with timezone. Rechecks must reuse the original deadline and wait_id." }),
+				wait_id: Type.Optional(Type.String({ description: "Omit for a new wait; required when re-declaring an existing wait, with its original deadline." })),
+				polling: Type.Optional(Type.Object({
+					interval_seconds: Type.Integer({ minimum: 1, maximum: 2147483, description: "Polling interval in whole seconds, from 1 to 2147483." }),
+					max_checks: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER, description: "Maximum polling checks: positive safe integer, at most 9007199254740991." }),
+				}, { additionalProperties: false, description: "Optional bounded polling for a new wait. Omit on recheck; existing polling cannot be reset." })),
+			}, { additionalProperties: false, description: "Wait with required reason and deadline; optional identity and polling." }),
+		], { description: "Scheduling decision, exclusive with lifecycle status and fields. ready forbids wait fields; wait requires reason and deadline. New waits require strictExecutionContract=true." })),
 		reason: Type.Optional(Type.String({ description: "Required when status is paused or blocked: describe the concrete blocker." })),
-		attempted_actions: Type.Optional(Type.Array(Type.String({ maxLength: 240 }), { maxItems: 8, description: "Actions attempted against the blocker." })),
+		attempted_actions: Type.Optional(Type.Array(Type.String({ maxLength: 240, description: "One action attempted against the blocker, at most 240 characters." }), { maxItems: 8, description: "Actions attempted against the blocker." })),
 		suggested_action: Type.Optional(Type.String({ description: "Optional suggested next step when status is paused." })),
 		completion_summary: Type.Optional(Type.String({ description: "Untrusted completion claim; never evidence." })),
 	}, { additionalProperties: false }),
 	executionMode: "sequential",
 	async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		if (params.continuation?.kind === "ready" && ["reason", "deadline", "wait_id", "polling"].some(field => Object.prototype.hasOwnProperty.call(params.continuation, field))) {
+			return { content: [{ type: "text", text: "A ready continuation must not include wait-only fields: reason, deadline, wait_id, or polling." }], details: {}, terminate: false };
+		}
 		// P1-3: persist any buffered in-turn mutations now so the auditor and
 		// status transitions observe the current task/state, not the stale disk.
 		core.flushGoalTransaction(ctx);

@@ -1,45 +1,31 @@
 # Publishing releases
 
-The `Publish npm` GitHub Actions workflow publishes through npm Trusted Publishing (OIDC). Agents need GitHub push/workflow access; no npm write token or recurring npm 2FA prompt is needed. Account 2FA stays enabled.
+This fork is published by npm account `dev-sergeev` as `@dev-sergeev/pi-goal-x`, from GitHub repository `dev-sergeev/pi-goal-x`. The unscoped `pi-goal-x` package belongs to the upstream maintainer and must not be used for fork releases. Preserve the upstream MIT license and contributor attribution.
 
-Bump package.json and package-lock.json together, update the changelog, and merge the release into main. Push a stable version tag matching package metadata:
+## Authenticated local publication
 
-```sh
-git tag -a vX.Y.Z -m 'Release vX.Y.Z'
-git push origin vX.Y.Z
-gh run list --workflow publish.yml
-```
+1. Confirm `gh api user` and `npm whoami` identify the intended publisher. Never commit npm credentials or an authentication `.npmrc`.
+2. Update `package.json` and both root version/name entries in `package-lock.json` together. Add the stable version to `CHANGELOG.md` and update the existing README installation example if the package name changes.
+3. Run the relevant validation and pack once into a temporary release directory:
 
-Before publishing, the workflow records the Pi extension download ranking and commits updated light/dark badges and README text to main. It uses the same best-recorded-rank method as the website. The tagged checkout receives that release’s saved observation before packing, so the npm package includes the updated badges. Ranking updates run only for real releases, never daily or during dry runs. A ranking failure stops publication. Retries reuse the release observation instead of fetching a new rank.
+   ```sh
+   npm pack --json --pack-destination /path/to/release-directory
+   ```
 
-The workflow checks main ancestry and version metadata, runs validation, packs once, uploads the tarball, publishes it with provenance, verifies registry integrity, and creates a GitHub release. Stable releases only; publication is serialized. An existing npm version is accepted only if the tarball integrity matches. Existing GitHub release notes/assets are preserved.
+4. Extract that tarball outside the repository; smoke-test the recovery CLI and extension registration with the supported host SDK. Check packaged metadata and file contents before publishing.
+5. Commit the release and completed implementation to the fork's `main`, create an annotated `vX.Y.Z` tag, and push the branch and tag to `origin`. Never push this release to `upstream`.
+6. Publish the exact checked tarball:
 
-To rehearse without publishing, run the workflow on main with an existing tag:
+   ```sh
+   npm publish /path/to/dev-sergeev-pi-goal-x-X.Y.Z.tgz --access public --tag latest
+   ```
 
-```sh
-gh workflow run publish.yml --ref main -f tag=v0.31.1 -f dry_run=true
-```
+   Complete npm's interactive authorization/2FA challenge if requested. Do not disable account 2FA. Local publication does not claim GitHub Actions provenance.
+7. Verify the public registry's package version, owner, `latest`, repository and `dist.integrity` against the packed artifact. If a publish command times out, inspect registry state before retrying: published versions are immutable.
+8. Create the GitHub release in `dev-sergeev/pi-goal-x` from the pushed tag, with release notes and the same tarball attached. Publish a draft only after registry verification.
 
-To retry a release after fixing workflow infrastructure:
+## Existing upstream automation
 
-```sh
-gh workflow run publish.yml --ref main -f tag=vX.Y.Z -f dry_run=false
-```
+`.github/workflows/publish.yml` remains explicitly restricted to `tmonk/pi-goal-x`. It does not publish this fork. Its npm trust relationship and release-ranking job belong to the upstream package; they are not automatically transferred by forking.
 
-Registry metadata and the latest tag may lag a successful npm publish. Verification polls each for up to five minutes; a timeout does not mean publication failed. Check registry availability before retrying. Failed-job reruns reuse the successful ranking job’s artifact ID, including across run attempts.
-
-Each run attempt retains its own tarball artifact. Repacking on another platform or npm version can change archive integrity even when source files match; an integrity mismatch stops the retry for investigation.
-
-Manual runs default to dry run. A dry run does not exercise npm OIDC authentication; only a real publish verifies the complete exchange. Do not publish an extra version solely to test authentication.
-
-## npm configuration
-
-The package trusts GitHub repository `tmonk/pi-goal-x`, workflow filename `publish.yml`, with direct `npm publish` permission and no approval environment. Setting up or changing npm trust requires interactive 2FA once. For setup:
-
-```sh
-npm trust github pi-goal-x --repo tmonk/pi-goal-x --file publish.yml --allow-publish --yes
-```
-
-Use GitHub-hosted runners; npm currently does not support self-hosted runners for trusted publishing. Keep `id-token: write` on the publishing job and use an OIDC-capable npm CLI. No `NPM_TOKEN` secret is required. Do not configure stage-only publishing or required environment reviewers if releases must run unattended.
-
-Reference: https://docs.npmjs.com/trusted-publishers/
+Trusted publishing for this scoped package would require a separately configured workflow and npm trust relationship. It is not enabled by local publication. Existing ranking observations and automated badges are preserved rather than claimed as a new download ranking for the scoped package.

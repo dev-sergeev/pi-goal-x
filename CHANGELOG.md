@@ -4,6 +4,16 @@ All notable changes to pi-goal-x are documented here.
 
 ## [Unreleased]
 
+## [0.32.4] — 2026-10-19
+
+### Changed
+
+- Publish the GigaChat-compatible fork as `@dev-sergeev/pi-goal-x`, maintained by Alexandr Sergeev at `dev-sergeev/pi-goal-x`. Preserve the original contributors and MIT license.
+
+### Fixed
+
+- Make all nine goal/drafting/oracle function descriptions valid for GigaChat: describe parameters and nested fields, use an explicit oracle disposition enum, and describe continuation as an object while preserving ready/wait validation. Project nullable drafting budgets only in GigaChat requests, retaining local null-removes-budget semantics and other providers' schemas.
+
 ## [0.32.3] — 2026-10-02
 
 ### Fixed
@@ -1760,6 +1770,7 @@ committed before/after harness all ship together as the one version after the
 
 <!-- Version links for navigation -->
 
+[0.32.4]: https://github.com/dev-sergeev/pi-goal-x/releases/tag/v0.32.4
 [0.18.4]: https://github.com/tmonk/pi-goal-x/releases/tag/v0.18.4
 [0.18.3]: https://github.com/tmonk/pi-goal-x/releases/tag/v0.18.3
 [0.16.0]: https://github.com/tmonk/pi-goal-x/releases/tag/v0.16.0

@@ -1,4 +1,5 @@
 import { cacheGoalHistory } from "./goal-prompt-cache.ts";
+import { normalizeGigaChatTools } from "./goal-gigachat.ts";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	GOAL_EVENT_ENTRY,
@@ -67,7 +68,11 @@ export function registerGoalEvents(core: GoalCore): void {
 	const liveRetention = new LiveTailRetention();
 	const sessionKeyFor = (ctx?: ExtensionContext): string =>
 		ctx?.sessionManager?.getSessionId?.() ? JSON.stringify([ctx.sessionManager.getSessionId(), ctx.model?.provider, ctx.model?.id]) : "unidentified";
-	pi.on("before_provider_request", (event, ctx) => cacheGoalHistory(event.payload, liveRetention.contents(sessionKeyFor(ctx as ExtensionContext | undefined))));
+	pi.on("before_provider_request", (event, ctx) => {
+		const payload = normalizeGigaChatTools(event.payload, ctx.model) ?? event.payload;
+		const cached = cacheGoalHistory(payload, liveRetention.contents(sessionKeyFor(ctx as ExtensionContext | undefined)));
+		return cached ?? (payload !== event.payload ? payload : undefined);
+	});
 	let continuationAfterSettleFor: string | null = null;
 	let networkErrorRecoveryAfterSettleFor: string | null = null;
 

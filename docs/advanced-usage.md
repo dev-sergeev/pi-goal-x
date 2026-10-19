@@ -79,6 +79,35 @@ For the reported OpenCode model, a narrowly scoped Pi `models.json` override mak
 
 The capability flag permits the adapter to send the explicit non-strict opt-out; it does not request strict sampling for ordinary goal tools. Merge this into existing model configuration and reload Pi. This is a provider-specific workaround, not a guarantee about third-party model behavior. The local reproduction inspects requests before transmission; the issue's live OpenCode A/B result has not been independently reproduced. See [issue #59](https://github.com/tmonk/pi-goal-x/issues/59) and [OpenAI's function-calling documentation](https://developers.openai.com/api/docs/guides/function-calling).
 
+## GigaChat function descriptions
+
+Goal and drafting tools, including the isolated blocker oracle's submission tool,
+use explicit parameter descriptions and string enums compatible with
+[GigaChat function validation](https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/function-validation).
+Scheduling decisions use an explicit object; `wait` still requires a reason and
+future deadline, and `ready` rejects wait-only fields.
+
+The `before_provider_request` hook projects the local ready/wait union into an
+explicit object and translates the drafting budget's local
+integer/null union into GigaChat's `type: "integer", nullable: true` wire schema.
+This preserves the local distinction between omitting `token_budget` (retain the
+current tweak budget) and passing `null` (remove it). Registered schemas are not
+mutated. The hook handles native `functions` and nested OpenAI-style `tools`
+declarations when the provider is `gigachat`, the model name starts with
+`GigaChat`, or the model base URL uses `api.giga.chat` or
+`gigachat.devices.sberbank.ru`. Other tools and provider schemas are unchanged.
+
+This package does not register a GigaChat provider, exchange OAuth credentials,
+or translate the chat protocol. Use a Pi provider or proxy that already supports
+GigaChat and invokes Pi's provider-request hook. An adapter that bypasses that
+hook must apply the nullable-schema projection before submitting descriptions.
+
+GigaChat's validator can report warnings about omitted `return_parameters` and
+`few_shot_examples`; these are optional, not schema errors. Accepted descriptions
+do not guarantee correct generated values: during live checks, models sometimes
+generated a numeric budget despite a request for `null`. Review the current and
+proposed budget in the confirmation dialog before accepting a tweak.
+
 ## Sharing a goal pool across worktrees
 
 By default goals stay in `<cwd>/.pi/goals`. Set `goalsRoot` in your project or global settings to an absolute directory (or `~/path`), or set `PI_GOAL_ROOT` for the session. Precedence is environment, project, global, then the existing default. For example:

@@ -16,7 +16,7 @@
  *   - every phase is durably recorded in the ledger with bounded payloads.
  */
 
-import { Type } from "@earendil-works/pi-ai";
+import { StringEnum, Type } from "@earendil-works/pi-ai";
 import { createHash } from "node:crypto";
 
 import { defineTool, SessionManager, SettingsManager, type AgentToolResult, type ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -110,23 +110,19 @@ export function oracleStateForFingerprint(events: readonly GoalLedgerEvent[], go
 // ── structured advice + isolated session ────────────────────────────────────
 
 const OracleAdviceSchema = Type.Object({
-	diagnosis: Type.String({ maxLength: 2000 }),
+	diagnosis: Type.String({ maxLength: 2000, description: "Analysis of the blocker and why the attempted approach has not succeeded." }),
 	alternatives: Type.Array(
 		Type.Object({
-			title: Type.String({ maxLength: 200 }),
-			rationale: Type.String({ maxLength: 1000 }),
-			steps: Type.Array(Type.String({ maxLength: 400 }), { minItems: 1, maxItems: 8 }),
-			expectedEvidence: Type.Array(Type.String({ maxLength: 400 }), { maxItems: 8 }),
-		}),
-		{ minItems: 1, maxItems: 4 },
+			title: Type.String({ maxLength: 200, description: "Short name for this alternative approach." }),
+			rationale: Type.String({ maxLength: 1000, description: "Why this approach could resolve the blocker." }),
+			steps: Type.Array(Type.String({ maxLength: 400, description: "One concrete action to carry out this approach." }), { minItems: 1, maxItems: 8, description: "Ordered actions for attempting this alternative." }),
+			expectedEvidence: Type.Array(Type.String({ maxLength: 400, description: "One observable result that would show whether this approach worked." }), { maxItems: 8, description: "Evidence to collect when evaluating this alternative." }),
+		}, { description: "One concrete alternative for making progress on the blocked goal." }),
+		{ minItems: 1, maxItems: 4, description: "Alternative approaches to resolving the blocker." },
 	),
-	recommendedIndex: Type.Integer({ minimum: 0, maximum: 3 }),
-	unresolvedQuestions: Type.Array(Type.String({ maxLength: 400 }), { maxItems: 6 }),
-	disposition: Type.Union([
-		Type.Literal("actionable"),
-		Type.Literal("needs_human"),
-		Type.Literal("insufficient_context"),
-	]),
+	recommendedIndex: Type.Integer({ minimum: 0, maximum: 3, description: "Zero-based index of the recommended approach in alternatives." }),
+	unresolvedQuestions: Type.Array(Type.String({ maxLength: 400, description: "One unanswered question relevant to resolving the blocker." }), { maxItems: 6, description: "Questions that remain after analyzing the available context." }),
+	disposition: StringEnum(["actionable", "needs_human", "insufficient_context"] as const, { description: "Whether the advice enables further work, requires human intervention, or lacks enough context." }),
 });
 
 export type OracleAdvice = {

@@ -233,7 +233,7 @@ function flatTaskSchema() {
 		parent_id: Type.Optional(Type.String({ description: "Optional parent task id in this proposal." })),
 		verification_contract: Type.Optional(Type.String({ description: "Evidence required for this task." })),
 		lightweight_subtasks: Type.Optional(Type.Boolean({ description: "True only for a task with lightweight children." })),
-	}), { description: "Flat parent-linked task tree to confirm with the goal." });
+	}, { description: "One proposed task and its optional parent and verification requirements." }), { description: "Flat parent-linked task tree to confirm with the goal." });
 }
 
 export function registerDraftingTools(core: GoalCore): void {
@@ -245,7 +245,7 @@ export function registerDraftingTools(core: GoalCore): void {
 		promptSnippet: "Ask the user one focused drafting question.",
 		parameters: Type.Object({
 			question: Type.String({ description: "The question to ask." }),
-			options: Type.Optional(Type.Array(Type.String({ description: "A concise answer option." }))),
+			options: Type.Optional(Type.Array(Type.String({ description: "A concise answer option." }), { description: "Suggested answers for the user to choose from." })),
 			recommended: Type.Optional(Type.Integer({ minimum: 0, description: "Zero-based recommended option." })),
 			allow_custom: Type.Optional(Type.Boolean({ description: "Allow a custom answer; defaults to true." })),
 		}, { additionalProperties: false }),
@@ -276,10 +276,10 @@ export function registerDraftingTools(core: GoalCore): void {
 				id: Type.String({ description: "Stable question id." }),
 				question: Type.String({ description: "Question for the user." }),
 				context: Type.Optional(Type.String({ description: "Optional short context." })),
-				options: Type.Array(Type.String({ description: "Answer option." })),
-				recommended: Type.Optional(Type.Integer({ minimum: 0 })),
-				allow_custom: Type.Optional(Type.Boolean()),
-			})),
+				options: Type.Array(Type.String({ description: "Answer option." }), { description: "Suggested answers for this question." }),
+				recommended: Type.Optional(Type.Integer({ minimum: 0, description: "Zero-based index of the recommended answer option." })),
+				allow_custom: Type.Optional(Type.Boolean({ description: "Allow a custom answer to this question; defaults to true." })),
+			}, { description: "One drafting question with its answer options and presentation settings." }), { description: "Questions needed to clarify the proposed goal and task plan." }),
 		}, { additionalProperties: false }),
 		async execute(_id, params, _signal, _update, ctx) {
 			if (!activeDraft(core)) return { content: [{ type: "text", text: "No guided goal draft is active." }], details: goalDetails(core.state.goal) };

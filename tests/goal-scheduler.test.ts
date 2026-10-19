@@ -228,6 +228,35 @@ test("update_goal rejects mixed forms and scheduler cloning protects rollback", 
 	assert.equal(invalid?.used, Number.MAX_SAFE_INTEGER);
 });
 
+test("update_goal rejects malformed ready and wait decisions without changing goal state", async t => {
+	const h = await fixture(t, 5);
+	h.begin();
+	assert.equal(h.wait().terminate, true);
+	const before = JSON.parse(JSON.stringify(h.core.state.goal));
+	const tool = h.tools.get("update_goal");
+	const deadline = new Date(Date.now() + 20000).toISOString();
+	const invalid = [
+		{ kind: "ready", reason: "Wait-only reason" },
+		{ kind: "ready", reason: undefined },
+		{ kind: "ready", deadline },
+		{ kind: "ready", wait_id: before!.scheduler!.wait!.id },
+		{ kind: "ready", polling: { interval_seconds: 1, max_checks: 2 } },
+		{ kind: "wait", deadline },
+		{ kind: "wait", reason: "Missing deadline" },
+		{ kind: "wait", reason: " ", deadline },
+		{ kind: "wait", reason: "Expired", deadline: new Date(Date.now() - 1000).toISOString() },
+		{ kind: "wait", reason: "Unknown wait", deadline, wait_id: "unknown" },
+		{ kind: "wait", reason: "Changed deadline", deadline, wait_id: before!.scheduler!.wait!.id },
+		{ kind: "wait", reason: "Reset polling", deadline: new Date(before!.scheduler!.wait!.deadline).toISOString(), wait_id: before!.scheduler!.wait!.id, polling: { interval_seconds: 2, max_checks: 3 } },
+	];
+	for (const continuation of invalid) {
+		const result = await tool.execute("invalid-continuation", { continuation }, undefined, undefined, h.ctx);
+		assert.equal(result.terminate, false, JSON.stringify(continuation));
+		assert.deepEqual(JSON.parse(JSON.stringify(h.core.state.goal)), before, "rejected decisions must preserve the goal and existing wait");
+	}
+	assert.equal(h.sent.length, 0);
+});
+
 test("maxAutonomousRuns is strictly parsed, layered, and removable", async t => {
 	const h = await fixture(t);
 	for (const n of [-1, 1.1, "1x", Number.MAX_SAFE_INTEGER + 1]) assert.equal(parseGoalSettings({ maxAutonomousRuns: n }).maxAutonomousRuns, undefined);
